@@ -15,18 +15,18 @@
 
 stdenv.mkDerivation rec {
   pname = "timeloop";
-  version = "unstable-2022-11-29";
+  version = "unstable-2023-07-18";
 
   src = fetchFromGitHub {
     owner = "NVlabs";
     repo = "timeloop";
-    rev = "905ba953432c812772de935d57fd0a674a89d3c1";
-    hash = "sha256-EXiWXf8hdX4vFRNk9wbFSOsix/zVkwrafGUtFrsoAN0=";
+    rev = "be27768a6466aeae18c52d0221ce778b8b58870c";
+    hash = "sha256-Fp3nmsT+JEE3KIojNXwNLt12FOmNZsjHVMZwMJg58iQ=";
   };
 
   nativeBuildInputs = [ scons ];
 
-  buildInputs = [
+  propagatedBuildInputs = [
     libconfig
     boost
     libyaml
@@ -37,49 +37,25 @@ stdenv.mkDerivation rec {
 
   preConfigure = ''
     cp -r ./pat-public/src/pat ./src/pat
+    rm include/pat
+    cp -r ./pat-public/src/pat ./include/pat
   '';
 
   enableParallelBuilding = true;
 
-  #link-time optimization fails on darwin
-  #see https://github.com/NixOS/nixpkgs/issues/19098
-  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-fno-lto";
-
-  postPatch = ''
-    # use nix ar/ranlib
-    substituteInPlace ./SConstruct \
-      --replace "env.Replace(AR = \"gcc-ar\")" "" \
-      --replace "env.Replace(RANLIB = \"gcc-ranlib\")" ""
-    '' + lib.optionalString stdenv.isDarwin ''
-    # prevent clang from dying on errors that gcc is fine with
-    substituteInPlace ./src/SConscript --replace "-Werror" "-Wno-inconsistent-missing-override"
-
-    # disable LTO on macos
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    # disable LTO on macos as link-time optimization fails within nix
+    # see https://github.com/NixOS/nixpkgs/issues/19098
     substituteInPlace ./src/SConscript --replace ", '-flto'" ""
 
-    # static builds on mac fail as no static libcrt is provided by apple
-    # see https://stackoverflow.com/questions/3801011/ld-library-not-found-for-lcrt0-o-on-osx-10-6-with-gcc-clang-static-flag
-    substituteInPlace ./src/SConscript \
-      --replace "'-static-libgcc', " "" \
-      --replace "'-static-libstdc++', " "" \
-      --replace "'-Wl,--whole-archive', '-static', " "" \
-      --replace ", '-Wl,--no-whole-archive'" ""
-
-    #remove hardcoding of gcc
+    #remove hardcoding of c compiler
     sed -i '40i env.Replace(CC = "${stdenv.cc.targetPrefix}cc")' ./SConstruct
     sed -i '40i env.Replace(CXX = "${stdenv.cc.targetPrefix}c++")' ./SConstruct
+  '';
 
-    #gpm doesn't exist on darwin
-    substituteInPlace ./src/SConscript --replace ", 'gpm'" ""
-   '';
-
-  sconsFlags =
-    # will fail on clang/darwin on link without --static due to undefined extern
-    # however, will fail with static on linux as nixpkgs deps aren't static
-    lib.optional stdenv.isDarwin "--static"
-    ++ lib.optional enableAccelergy "--accelergy"
+  sconsFlags = lib.optional enableAccelergy "--accelergy"
     ++ lib.optional enableISL "--with-isl";
-
+    #FIXME isl may require additional deps
 
   installPhase = ''
     cp -r ./bin ./lib $out
@@ -87,6 +63,7 @@ stdenv.mkDerivation rec {
     cp -r ./doc $out/share
     mkdir -p $out/data
     cp -r ./problem-shapes ./configs $out/data
+    cp -r ./include $out/include
    '';
 
   meta = with lib; {
