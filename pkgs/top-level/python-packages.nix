@@ -8175,6 +8175,8 @@ self: super: with self; {
 
   pythonfinder = callPackage ../development/python-modules/pythonfinder { };
 
+  pytimeloop = callPackage ../development/python-modules/pytimeloop { };
+  
   pytomorrowio = callPackage ../development/python-modules/pytomorrowio { };
 
   pyuca = callPackage ../development/python-modules/pyuca { };
